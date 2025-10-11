@@ -1369,8 +1369,8 @@ content: |-
                   const annotations = attachment.getAnnotations();
                   
                   if (annotations.length === 0) {
-                      console.log("  该附件没有 annotations");
-                      sharedObj.itemData.attachments.push(attachmentData);
+                      // console.log("  该附件没有 annotations");
+                      // sharedObj.itemData.attachments.push(attachmentData);
                       continue;
                   }
                   

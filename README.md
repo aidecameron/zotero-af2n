@@ -108,7 +108,8 @@ zotero-af2n/
 ## 支持作者
 
 作者的公众号：**ai的十日谈**
-![](https://cdn.jsdelivr.net/gh/aidecameron/imgbed@main/blog/2025/10/1760165896715_wechat_aidecameron.JPG)
+
+<img src="https://cdn.jsdelivr.net/gh/aidecameron/imgbed@main/blog/2025/10/1760165896715_wechat_aidecameron.JPG?raw=true" width="50%"/>
 
 ## 许可证
 

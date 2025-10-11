@@ -1,0 +1,1500 @@
+# This template is specifically for importing/sharing, using better 
+# notes 'import from clipboard': copy the content and
+# goto Zotero menu bar, click Tools->New Template from Clipboard.  
+# Do not copy-paste this to better notes template editor directly.
+name: "[item] AF2N(Annotation Flow to Note) 0.11"
+zoteroVersion: "7.0.26"
+pluginVersion: "2.5.8"
+savedAt: "2025-10-11T03:34:06.923Z"
+content: |-
+  
+  
+  // @use-refresh
+  // @beforeloop-begin
+  
+  ${{
+  
+  if(globalThis.TemplateEngine){
+      delete globalThis.TemplateEngine;
+  }
+  
+  const console = Zotero.getMainWindow().console;
+  
+  
+  (function() {
+      'use strict';
+  
+  class GlobalTemplateEngine {
+  	
+          constructor() {
+              if (GlobalTemplateEngine.instance) {
+                  return GlobalTemplateEngine.instance;
+              }
+          
+              this.parsers = new Map();
+              this.escapeRules = new Map([
+                  ['\\', '\\\\'], 
+                  ['*', '\\*'],              
+                  ['_', '\\_'],              
+                  ['`', '\\`'],              
+                  ['#', '\\#'],              
+                  ['[', '\\['],              
+                  [']', '\\]'],              
+                  ['(', '\\('],              
+                  [')', '\\)'],              
+                  ['>', '\\>'],              
+                  ['|', '\\|'],              
+                  ['~', '\\~'],              
+                  ['^', '\\^']               
+              ]);
+              this.initDefaultParsers();
+              GlobalTemplateEngine.instance = this;
+          }
+  
+  		
+          
+          evaluateMethodCall(expression, data) {
+              try {
+                  const hasMatch = expression.match(/^has\(([^,]+),\s*['"]([^'"]+)['"],\s*['"]([^'"]+)['"]\)$/);
+                  if (hasMatch) {
+                      const [, objectPath, propertyName, targetValue] = hasMatch;
+                      return this.evaluateHasFunction(objectPath.trim(), propertyName, targetValue, data);
+                  }
+                  
+                  const methodCallMatch = expression.match(/^(.+?)\.([^.()]+)\(([^)]*)\)$/);
+                  if (!methodCallMatch) {
+                      return false;
+                  }
+                  
+                  const [, objectPath, methodName, argsStr] = methodCallMatch;
+                  
+                  const obj = this.getNestedValue(data, objectPath);
+                  
+                  if (!obj) {
+                      return false;
+                  }
+                  
+                  if (typeof obj[methodName] !== 'function') {
+                      return false;
+                  }
+                  
+                  const args = this.parseMethodArguments(argsStr);
+                  
+                  const result = obj[methodName].apply(obj, args);
+                  
+                  return Boolean(result);
+                  
+              } catch (error) {
+                  return false;
+              }
+          }
+          
+          evaluateHasFunction(objectPath, propertyName, targetValue, data) {
+              try {
+                  let targetObject;
+                  if (objectPath === 'this') {
+                      targetObject = data.this || data;
+                  } else {
+                      targetObject = this.getNestedValue(data, objectPath);
+                  }
+                  
+                  if (!targetObject) {
+                      return false;
+                  }
+                  
+                  return this.searchAnnotationsRecursively(targetObject, propertyName, targetValue);
+              } catch (error) {
+                  return false;
+              }
+          }
+          
+          searchAnnotationsRecursively(obj, propertyName, targetValue) {
+              if (!obj || typeof obj !== 'object') {
+                  return false;
+              }
+              
+              if (Array.isArray(obj.annotations)) {
+                  for (const annotation of obj.annotations) {
+                      if (this.checkAnnotationProperty(annotation, propertyName, targetValue)) {
+                          return true;
+                      }
+                  }
+              }
+              
+              for (const key in obj) {
+                  if (obj.hasOwnProperty(key) && key !== 'annotations') {
+                      const value = obj[key];
+                      
+                      if (Array.isArray(value)) {
+                          for (const item of value) {
+                              if (this.searchAnnotationsRecursively(item, propertyName, targetValue)) {
+                                  return true;
+                              }
+                          }
+                      }
+                      else if (value && typeof value === 'object') {
+                          if (this.searchAnnotationsRecursively(value, propertyName, targetValue)) {
+                              return true;
+                          }
+                      }
+                  }
+              }
+              
+              return false;
+          }
+          
+          checkAnnotationProperty(annotation, propertyName, targetValue) {
+              if (!annotation || typeof annotation !== 'object') {
+                  return false;
+              }
+              
+              const propertyValue = annotation[propertyName];
+              if (propertyValue === undefined || propertyValue === null) {
+                  return false;
+              }
+              
+              if (propertyName === 'ctrl') {
+                  return String(propertyValue).includes(targetValue);
+              }
+              
+              return String(propertyValue) === targetValue;
+          }
+          
+          parseMethodArguments(argsStr) {
+              if (!argsStr.trim()) {
+                  return [];
+              }
+              
+              const args = [];
+              const trimmed = argsStr.trim();
+              
+              const parts = trimmed.split(',').map(part => part.trim());
+              
+              for (const part of parts) {
+                  if (part.startsWith('"') && part.endsWith('"')) {
+                      args.push(part.slice(1, -1));
+                  } else if (part.startsWith("'") && part.endsWith("'")) {
+                      args.push(part.slice(1, -1));
+                  } else if (!isNaN(part)) {
+                      args.push(Number(part));
+                  } else if (part === 'true') {
+                      args.push(true);
+                  } else if (part === 'false') {
+                      args.push(false);
+                  } else if (part === 'null') {
+                      args.push(null);
+                  } else {
+                      args.push(part);
+                  }
+              }
+              
+              return args;
+          }
+          
+          escapeMarkdown(text) {
+              if (!text || typeof text !== 'string') {
+                  return text;
+              }
+              
+              let result = text;
+              
+              for (const [pattern, replacement] of this.escapeRules) {
+                  result = result.replaceAll(pattern, replacement);
+              }
+              
+              return result;
+          }
+          
+          removeComments(template) {
+              if (!template || typeof template !== 'string') {
+                  return template;
+              }
+              
+              const lines = template.split('\n');
+              const processedLines = [];
+              
+              for (const line of lines) {
+                  const commentIndex = line.indexOf('////');
+                  
+                  if (commentIndex === -1) {
+                      processedLines.push(line);
+                  } else {
+                      const beforeComment = line.substring(0, commentIndex);
+                      processedLines.push(beforeComment);
+                  }
+              }
+              
+              return processedLines.join('\n');
+          }
+          
+          initDefaultParsers() {
+              this.parsers.set('code', {
+                  pattern: /\{\{<code>([^}]*)\}\}/g,
+                  handler: (match, codeType, content, data) => {
+                      const type = codeType.trim();
+                      return '```' + type + '\n';
+                  }
+              });
+              
+              this.parsers.set('escape', {
+                  pattern: /\{\{escape\(([^)]+)\)\}\}/g,
+                  handler: function(match, path, content, data) {
+                      const value = this.getNestedValue(data, path.trim());
+                      return value !== undefined ? this.escapeMarkdown(String(value)) : '';
+                  }
+              });
+              
+              this.parsers.set('variable', {
+                  pattern: /\{\{([^#\/<][^}]*)\}\}/g,
+                  handler: function(match, path, content, data) {
+                      const value = this.getNestedValue(data, path.trim());
+                      return value !== undefined ? String(value) : '';
+                  }
+              });
+              
+              this.parsers.set('if', {
+                  pattern: /\{\{#if\s+([^}]+)\}\}([\s\S]*?)\{\{\/if\}\}/g,
+                  handler: function(match, condition, content, data) {
+                      const conditionValue = this.evaluateCondition(condition, data);
+                      return conditionValue ? this.render(content, data) : '';
+                  }
+              });
+              
+              this.parsers.set('each', {
+                  pattern: /\{\{#each\s+([^}]+)\}\}([\s\S]*?)\{\{\/each\}\}/g,
+                  handler: function(match, arrayPath, content, data) {
+                      let array;
+                      
+                      const linesMatch = arrayPath.match(/^lines\(([^)]+)\)$/);
+                      if (linesMatch) {
+                          const textPath = linesMatch[1].trim();
+                          const text = this.getNestedValue(data, textPath);
+                          if (typeof text === 'string') {
+                              array = text.split('\n').map(line => line.trim()).filter(line => line.length > 0);
+                          } else {
+                              array = [];
+                          }
+                      } else {
+                          array = this.getNestedValue(data, arrayPath);
+                          if (!Array.isArray(array)) return '';
+                      }
+                      
+                      
+                      const results = array.map((item, index) => {
+                           const itemData = { ...data, this: item, index: index, first: index === 0, last: index === array.length - 1 };
+                           const rendered = this.render(content, itemData);
+                           return rendered;
+                       });
+                      
+                      const joined = results.join('');
+                      return joined;
+                  }
+              });
+          }
+          
+          addParser(name, pattern, handler) {
+              this.parsers.set(name, { pattern, handler });
+              return this;
+          }
+          
+          removeParser(name) {
+              return this.parsers.delete(name);
+          }
+          
+          getParserNames() {
+              return Array.from(this.parsers.keys());
+          }
+          
+          
+          preprocess_data(data = {}){
+              if (!data.items || !Array.isArray(data.items)) {
+                  return data;
+              }
+              
+              const deepcopy = (obj) => JSON.parse(JSON.stringify(obj));
+  
+              const MINDMAP_COLOR = 'Magenta';
+              const MINDMAP_COLOR2 = 'magenta'
+  
+              const TITLE_COLOR = 'Gray';
+              const TITLE_COLOR2 = 'gray'
+  
+              const CTRL_CONCAT = '@';
+              const CTRL_MM_ROOT = '!';
+              const CTRL_MM_NODE = '#';
+              const CTRL_LIST = '-';
+              const CTRL_ORDER_LIST = 'o';
+              const CTRL_MM_BLOCK = 'b';
+              const CTRL_END = '<'; 
+              
+              for (let item of data.items) {
+                  if (!item.attachments || !Array.isArray(item.attachments)) {
+                      continue;
+                  }
+                  
+                  for (let attachment of item.attachments) {
+                      if (!attachment.annotations || !Array.isArray(attachment.annotations)) {
+                          continue;
+                      }
+                      
+                      const rawAnnotations = attachment.annotations.map(annotation => {
+                          const comment = annotation.comment || '';
+                          
+                          let ctrl = '';
+                          if (comment.startsWith('#') || comment.startsWith('!') || comment.startsWith('@') || 
+                              comment.startsWith('b') || comment.startsWith('-') || comment.startsWith('o') ) {
+                              const match = comment.match(/^[#!@b\-o<]+/);
+                              if (match) {
+                                  ctrl = match[0];
+                                  if (ctrl.includes(' ')) {
+                                      ctrl = ctrl.split(' ')[0];
+                                  }
+                              }
+                          }
+                          
+                          const realComment = comment.replace(ctrl, '').trim();
+                          
+                          return {
+                              ...annotation,
+                              comment: realComment,
+                              ctrl: ctrl
+                          };
+                      });
+                      
+                      const processedAnnotations = [];
+                      let concating = '';
+                      let in_concat = false;
+                      
+                      for (let i = 0; i < rawAnnotations.length; i++) {
+                          const annotation = rawAnnotations[i];
+                          
+                          if (annotation.ctrl.includes(CTRL_CONCAT)) {
+                              in_concat = true;
+                              concating += annotation.text;
+                              
+                              const isLastAnnotation = i === rawAnnotations.length - 1;
+                              const nextAnnotation = isLastAnnotation ? null : rawAnnotations[i + 1];
+                              const shouldEndConcat = isLastAnnotation || 
+                                                    annotation.color !== nextAnnotation?.color ||
+                                                    annotation.ctrl.includes(CTRL_END) ||
+                                                    !nextAnnotation?.ctrl.includes(CTRL_CONCAT);
+                              
+                              if (shouldEndConcat) {
+                                  processedAnnotations.push({
+                                      ...annotation,
+                                      text: concating,
+                                      comment: annotation.comment,
+                                      ctrl: annotation.ctrl.replace(CTRL_CONCAT+CTRL_END, '').replace(CTRL_CONCAT, '')
+                                  });
+                                  concating = '';
+                                  in_concat = false;
+                              }
+                          } else {
+                              processedAnnotations.push(annotation);
+                          }
+                      }
+  
+                      const startWithNumber = (str) => /^\d+(\.\d+)?\.?/.test(str);
+                      const extractOrderNumber = (str) => str.match(/^\d+(\.\d+)?\.?/)[0];
+  
+                      const processedAnnotations1 = [];
+                      for (let i=0; i<processedAnnotations.length;) {
+                          const annotation = processedAnnotations[i];
+                          if(annotation.ctrl.includes(CTRL_LIST) ){
+                              let listText = annotation.text;
+                              let listComment = annotation.comment;
+                              let j=i;
+                              while(j+1 < processedAnnotations.length 
+                                  && processedAnnotations[j+1].color === annotation.color
+                                  && processedAnnotations[j+1].ctrl.includes(CTRL_LIST)){
+                                  listText += '\n';
+                                  const tabCount = processedAnnotations[j+1].ctrl.split(CTRL_LIST).length - 1;
+                                  listText += '\t'.repeat(tabCount);
+                                  listText += CTRL_LIST + ' ' +processedAnnotations[j+1].text;
+                                  listComment += '\n' + processedAnnotations[j+1].comment;
+                                  j++;
+                              }
+  
+                              annotation.text = listText;
+                              annotation.comment = listComment.trim();
+                              annotation.ctrl = annotation.ctrl.replace(CTRL_LIST, '');
+                              i = j;
+                          }else if(annotation.ctrl.includes(CTRL_ORDER_LIST)){
+                              let listText = annotation.text;
+                              let listComment = annotation.comment;
+                              let j=i;
+                              while(j+1 < processedAnnotations.length 
+                                  && processedAnnotations[j+1].color === annotation.color
+                                  && (processedAnnotations[j+1].ctrl.includes(CTRL_ORDER_LIST)
+                                  || startWithNumber(processedAnnotations[j+1].comment))){
+                                  listText += '\n';
+                                  const tabCount = processedAnnotations[j+1].ctrl.split(CTRL_ORDER_LIST).length - 1;
+                                  listText += '\t'.repeat(tabCount);
+                                  let prefix = '';
+                                  if(startWithNumber(processedAnnotations[j+1].comment)){
+                                      prefix = extractOrderNumber(processedAnnotations[j+1].comment);
+                                  }else{
+                                      prefix = (j-i+1) + '.';
+                                  }
+                                  listText += prefix + ' ' +processedAnnotations[j+1].text;
+                                  listComment += '\n' + processedAnnotations[j+1].comment;
+                                  j++;
+                              }
+                              annotation.text = listText;
+                              annotation.comment = listComment.trim();
+                              i = j;
+                              annotation.ctrl = annotation.ctrl.replace(CTRL_ORDER_LIST, '');
+                          }
+                          processedAnnotations1.push(annotation);
+                          i++;
+                      }
+  
+  
+                      const processedAnnotations2 = [];
+                      const mindAnnotations = [];
+  
+                      let isThereRoot = false;
+                      for (let annotation of processedAnnotations1) {
+                          if(annotation.ctrl.includes(CTRL_MM_ROOT)){
+                                  isThereRoot = true;
+                          }
+                      }
+                      for (let annotation of processedAnnotations1) {
+                          if (annotation.color === MINDMAP_COLOR || annotation.color === MINDMAP_COLOR2) {
+                              if(annotation.ctrl.includes(CTRL_MM_ROOT)){
+                                  annotation.ctrl = annotation.ctrl.replace(CTRL_MM_ROOT, CTRL_MM_NODE);
+                                  mindAnnotations.unshift(annotation);
+                              }else{
+                                  if(isThereRoot){
+                                      if(annotation.ctrl.includes(CTRL_MM_NODE)){
+                                          annotation.ctrl = annotation.ctrl + CTRL_MM_NODE;
+                                      }
+                                  }
+                                  mindAnnotations.push(annotation);
+                              }
+                              
+                          }else if(annotation.color == TITLE_COLOR || annotation.color == TITLE_COLOR2){
+                              annotation.text = annotation.comment + ' ' + annotation.text;
+                              annotation.comment = '';
+                              processedAnnotations2.push(annotation);
+                          }else{
+                              processedAnnotations2.push(annotation);
+                          } 
+                      }
+                      
+                      const rectifiedMindAnnotations = [];
+                      for (let i = 0; i < mindAnnotations.length;) {
+                          const annotation = mindAnnotations[i];
+                          if(annotation.ctrl.includes(CTRL_MM_NODE)){
+                              rectifiedMindAnnotations.push(annotation);
+                              i++;
+                              continue;
+                          }
+  
+                          if(annotation.ctrl.includes(CTRL_MM_BLOCK)){
+                              let blockEndIndex = i;
+                              while(blockEndIndex < mindAnnotations.length && 
+                                    mindAnnotations[blockEndIndex].ctrl.includes(CTRL_MM_BLOCK)){
+                                  blockEndIndex++;
+                              }
+                              blockEndIndex--;
+                              
+                              let prevCtrlLen = 0;
+                              let nextCtrlLen = 0;
+                              
+                              if(i > 0){
+                                  prevCtrlLen = mindAnnotations[i-1].ctrl.length;
+                              }
+                              
+                              if(blockEndIndex + 1 < mindAnnotations.length){
+                                  nextCtrlLen = mindAnnotations[blockEndIndex + 1].ctrl.length;
+                              }
+  
+                              if(prevCtrlLen < nextCtrlLen){
+                                  const nextNodeCtrl = (blockEndIndex + 1 < mindAnnotations.length) ? 
+                                      mindAnnotations[blockEndIndex + 1].ctrl : 
+                                      annotation.ctrl;
+                                  
+                                  rectifiedMindAnnotations.push({
+                                      color: annotation.color,
+                                      text: '',
+                                      comment: '',
+                                      ctrl: nextNodeCtrl
+                                  });
+                              }
+                              
+                              for(let j = i; j <= blockEndIndex && j < mindAnnotations.length; j++){
+                                  rectifiedMindAnnotations.push({
+                                      ...mindAnnotations[j],
+                                      ctrl: mindAnnotations[j].ctrl.replaceAll(CTRL_MM_BLOCK, '\t')
+                                  }); 
+                              }
+                              
+                              i = blockEndIndex + 1;
+                          } else {
+                              rectifiedMindAnnotations.push(annotation);
+                              i++;
+                          }
+                      }
+  
+                      for(let j = 0; j < processedAnnotations2.length; j++){
+                          if(processedAnnotations2[j].ctrl.includes(CTRL_MM_BLOCK)){
+                              processedAnnotations2[j].ctrl = processedAnnotations2[j].ctrl.replaceAll(CTRL_MM_BLOCK, '\t');
+                          }
+                      }
+  
+                      attachment.annotations = processedAnnotations2;
+  
+                      if(mindAnnotations.length > 0){
+                          attachment.mindAnnotations = rectifiedMindAnnotations;
+                      }
+                  }
+              }
+              data.totalAnnotations = data.items.reduce((total, item) => {
+                  return total + item.attachments.reduce((sum, attachment) => {
+                      return sum + attachment.annotations.length;
+                  }, 0);
+              }, 0);
+  
+              data.totalMindAnnotations = data.items.reduce((total, item) => {
+                  return total + item.attachments.reduce((sum, attachment) => {
+                      return sum + (attachment.mindAnnotations?.length || 0);
+                  }, 0);
+              }, 0);
+              return data;
+          }
+  
+          preprocessTemplate(template) {
+              const lines = template.split('\n');
+              const processedLines = [];
+              
+              for (let i = 0; i < lines.length; i++) {
+                  const line = lines[i];
+                  
+                  if (line.trim() === '') {
+                      processedLines.push(line);
+                      continue;
+                  }
+                  
+                  if (!line.includes('{{') || !line.includes('}}')) {
+                      processedLines.push(line);
+                      continue;
+                  }
+                  
+                  const templateMatches = [];
+                  let searchIndex = 0;
+                  while (searchIndex < line.length) {
+                      const startIndex = line.indexOf('{{', searchIndex);
+                      if (startIndex === -1) break;
+                      
+                      const endIndex = line.indexOf('}}', startIndex);
+                      if (endIndex === -1) break;
+                      
+                      templateMatches.push({
+                          start: startIndex,
+                          end: endIndex + 2
+                      });
+                      
+                      searchIndex = endIndex + 2;
+                  }
+                  
+                  if (templateMatches.length === 0) {
+                      processedLines.push(line);
+                      continue;
+                  }
+                  
+                  const firstTemplateStart = templateMatches[0].start;
+                  const lastTemplateEnd = templateMatches[templateMatches.length - 1].end;
+                  
+                  const lineStart = line.substring(0, firstTemplateStart);
+                  const lineEnd = line.substring(lastTemplateEnd);
+                  
+                  const lineStartOnlyWhitespace = /^[ \t]*$/.test(lineStart);
+                  const lineEndOnlyWhitespace = /^[ \t]*$/.test(lineEnd);
+                  
+                  if (lineStartOnlyWhitespace && lineEndOnlyWhitespace) {
+                      const templateContent = line.substring(firstTemplateStart, lastTemplateEnd);
+                      
+                      const hasCodeTag = /\{\{<code[^}]*\}\}/.test(templateContent);
+                      
+                      if (hasCodeTag) {
+                          processedLines.push(templateContent);
+                      } else {
+                          processedLines.push({ content: templateContent, isStandalone: true, indent: lineStart });
+                      }
+                  } else {
+                      processedLines.push(line);
+                  }
+              }
+              
+              let result = '';
+              
+              for (let i = 0; i < processedLines.length; i++) {
+                  const item = processedLines[i];
+                  
+                  if (typeof item === 'object' && item.isStandalone) {
+                      result += item.content;
+                      
+                      const nextItem = i + 1 < processedLines.length ? processedLines[i + 1] : null;
+                      if (nextItem && !(typeof nextItem === 'object' && nextItem.isStandalone)) {
+                      }
+                  } else {
+                      result += item;
+                      
+                      if (i < processedLines.length - 1) {
+                          result += '\n';
+  					}
+                  }
+              }
+              
+              
+              return result;
+          }
+  
+          render(template, data = {}) {
+              template = this.removeComments(template);
+              return this.parseTemplate(template, data);
+          }
+          
+          parseTemplate(template, data, depth = 0) {
+              if (depth === 0) {
+                  template = this.preprocessTemplate(template);
+              }
+              
+              let result = '';
+              let i = 0;
+              
+              while (i < template.length) {
+                  if (template.substring(i, i + 2) === '{{') {
+                      const endIndex = template.indexOf('}}', i);
+                      if (endIndex === -1) {
+                          result += template.substring(i);
+                          break;
+                      }
+                      
+                      const tag = template.substring(i + 2, endIndex).trim();
+                      
+                      const isStandaloneLine = this.isStandaloneTemplateLine(template, i, endIndex + 2);
+                      
+                      if (tag.startsWith('<code>')) {
+                          const codeContent = tag.substring(6);
+                          
+                          result += '```' + codeContent + '\n';
+                          i = endIndex + 2;
+                          
+                          if (i < template.length && template[i] === '\n') {
+                              i++;
+                          }
+                      } else if (tag.startsWith('escape(') && tag.endsWith(')')) {
+                          const path = tag.substring(7, tag.length - 1).trim();
+                          const value = this.getNestedValue(data, path);
+                          result += value !== undefined ? this.escapeMarkdown(String(value)) : '';
+                          i = endIndex + 2;
+                      } else if (tag.startsWith('#each ')) {
+                          const arrayPath = tag.substring(6).trim();
+                          const { content, nextIndex } = this.findBlockContent(template, endIndex + 2, 'each');
+                          
+                          while (result.endsWith('  ') && result.length >= 2) {
+                              if (result.length === 2 || result[result.length - 3] === '\n') {
+                                  result = result.substring(0, result.length - 2);
+                              } else {
+                                  break;
+                              }
+                          }
+                          
+                          let array;
+                          const linesMatch = arrayPath.match(/^lines\(([^)]+)\)$/);
+                          if (linesMatch) {
+                              const textPath = linesMatch[1].trim();
+                              const text = this.getNestedValue(data, textPath);
+                              if (typeof text === 'string') {
+                                  array = text.split('\n').map(line => line.trim()).filter(line => line.length > 0);
+                              } else {
+                                  array = [];
+                              }
+                          } else {
+                              array = this.getNestedValue(data, arrayPath);
+                          }
+                          
+                          if (Array.isArray(array)) {
+                              let loopContent = content;
+                              
+                              for (let idx = 0; idx < array.length; idx++) {
+                                  const currentItem = array[idx];
+                                  const itemData = {
+                                      ...data,
+                                      this: currentItem,
+                                      index: idx,
+                                      first: idx === 0,
+                                      last: idx === array.length - 1,
+                                      parent: data 
+                                  };
+                                  
+                                  let itemResult = this.parseTemplate(loopContent, itemData, depth + 1);
+                                  
+                                  const beforeSpaceRemoval = itemResult;
+                                  itemResult = itemResult.replace(/[ ]{2,}$/, '');
+                                  
+                                  if (itemResult.startsWith('\n')) {
+                                      itemResult = itemResult.substring(1);
+                                  }
+                                  
+                                  result += itemResult;
+                                  
+                              }
+                              
+                              const loopEndingNewlines = loopContent.match(/\n*$/);
+                              if (loopEndingNewlines && loopEndingNewlines[0].length > 0) {
+                                  const expectedEndingNewlines = loopEndingNewlines[0].length;
+                                  const currentEndingNewlines = result.match(/\n*$/)[0].length;
+                                  if (currentEndingNewlines < expectedEndingNewlines) {
+                                      const toAdd = expectedEndingNewlines - currentEndingNewlines;
+                                      result += '\n'.repeat(toAdd);
+                                  }
+                              }
+                              
+                          }
+                          i = nextIndex;
+                          
+                          if (i < template.length) {
+                              let nextNonWhitespace = i;
+                              while (nextNonWhitespace < template.length && 
+                                     (template[nextNonWhitespace] === ' ' || template[nextNonWhitespace] === '\t')) {
+                                  nextNonWhitespace++;
+                              }
+                              
+                              if (nextNonWhitespace < template.length && 
+                                  template[nextNonWhitespace] !== '\n' && 
+                                  !result.endsWith('\n') &&
+                                  !template.substring(nextNonWhitespace).startsWith('{{/each}}')) {
+                                  result += '\n';
+                              }
+                          }
+                      } else if (tag.startsWith('#switch ')) {
+                          const switchVariable = tag.substring(8).trim();
+                          const { content, nextIndex } = this.findBlockContent(template, endIndex + 2, 'switch');
+                          
+                          const switchResult = this.parseSwitchContent(content, switchVariable, data);
+                          result += switchResult;
+                          
+                          i = nextIndex;
+                      } else if (tag.startsWith('#if ')) {
+                          const condition = tag.substring(4).trim();
+                          const { content, nextIndex } = this.findBlockContent(template, endIndex + 2, 'if');
+                          
+                          const elseResult = this.findSameLevelElse(content);
+                          if (elseResult.index !== -1) {
+                              const ifContent = content.substring(0, elseResult.index);
+                              const elseContent = content.substring(elseResult.index + elseResult.length);
+                              
+                              const conditionValue = this.evaluateCondition(condition, data);
+                              let selectedContent = conditionValue ? ifContent : elseContent;
+                              
+                              const startsWithNewline = selectedContent.startsWith('\n');
+                              const endsWithNewline = selectedContent.endsWith('\n');
+                              
+                              if (startsWithNewline) {
+                                  selectedContent = selectedContent.substring(1);
+                              }
+                              if (endsWithNewline) {
+                                  selectedContent = selectedContent.substring(0, selectedContent.length - 1);
+                              }
+                              
+                              const selectedResult = this.parseTemplate(selectedContent, data, depth + 1);
+                              result += selectedResult;
+                              
+                              if (selectedResult.length > 0 && endsWithNewline) {
+                                  result += '\n';
+                              }
+                          } else {
+                              const conditionValue = this.evaluateCondition(condition, data);
+                              
+                              if (conditionValue) {
+                                  const ifResult = this.parseTemplate(content, data, depth + 1);
+                                  result += ifResult;
+                              }
+                          }
+                          i = nextIndex;
+                      } else if (!tag.startsWith('/')) {
+                          const value = this.getNestedValue(data, tag);
+                          if (value === null || value === undefined) {
+                              result += '';
+                          } else {
+                              result += String(value);
+                          }
+                          i = endIndex + 2;
+                      } else {
+                          i = endIndex + 2;
+                          if (isStandaloneLine && i < template.length && template[i] === '\n') {
+                              i++;
+                          }
+                      }
+                  } else {
+                      result += template[i];
+                      i++;
+                  }
+              }
+              
+              
+              return result;
+          }
+          
+          isStandaloneTemplateLine(template, startIndex, endIndex) {
+              let lineStart = startIndex;
+              while (lineStart > 0 && template[lineStart - 1] !== '\n') {
+                  lineStart--;
+              }
+              
+              let lineEnd = endIndex;
+              while (lineEnd < template.length && template[lineEnd] !== '\n') {
+                  lineEnd++;
+              }
+              
+              const line = template.substring(lineStart, lineEnd);
+              
+              const firstBraceStart = line.indexOf('{{');
+              if (firstBraceStart === -1) return false;
+              
+              const lastBraceEnd = line.lastIndexOf('}}');
+              if (lastBraceEnd === -1) return false;
+              
+              const beforeFirstBrace = line.substring(0, firstBraceStart);
+              const trimmedBefore = beforeFirstBrace.replace(/[ \t]/g, '');
+              
+              const afterLastBrace = line.substring(lastBraceEnd + 2);
+              const trimmedAfter = afterLastBrace.replace(/[ \t]/g, '');
+              
+              return trimmedBefore === '' && trimmedAfter === '';
+          }
+          
+          findSameLevelElse(content) {
+              let depth = 0;
+              let i = 0;
+              
+              while (i < content.length) {
+                  if (content.substring(i, i + 2) === '{{') {
+                      const endIndex = content.indexOf('}}', i);
+                      if (endIndex === -1) {
+                          break;
+                      }
+                      
+                      const tag = content.substring(i + 2, endIndex).trim();
+                      
+                      if (tag.startsWith('#if ')) {
+                          depth++;
+                      } else if (tag === '/if') {
+                          depth--;
+                      } else if (tag === 'else' && depth === 0) {
+                          return { index: i, length: 8 };
+                      } else if (tag === '#else' && depth === 0) {
+                          return { index: i, length: 9 };
+                      }
+                      
+                      i = endIndex + 2;
+                  } else {
+                      i++;
+                  }
+              }
+              
+              return { index: -1, length: 0 };
+          }
+          
+          findBlockContent(template, startIndex, blockType) {
+              let depth = 1;
+              let i = startIndex;
+              let content = '';
+              
+              while (i < template.length && depth > 0) {
+                  if (template.substring(i, i + 2) === '{{') {
+                      const endIndex = template.indexOf('}}', i);
+                      if (endIndex === -1) {
+                          break;
+                      }
+                      
+                      const tag = template.substring(i + 2, endIndex).trim();
+                      
+                      if (tag === `#${blockType}` || tag.startsWith(`#${blockType} `)) {
+                          depth++;
+                      } else if (tag === `/${blockType}` || (blockType === 'code' && tag.startsWith('<code'))) {
+                          depth--;
+                          if (depth === 0) {
+                              if (blockType === 'code') {
+                                  content = content.replace(/\t+$/, '');
+                                  return { content, nextIndex: endIndex + 2 };
+                              } else {
+                                  content = content.replace(/\t+$/, '');
+                                  return { content, nextIndex: endIndex + 2 };
+                              }
+                          }
+                      }
+                      
+                      if (depth > 0) {
+                          if (blockType === 'code' && (tag.startsWith('<code') || tag === '/code')) {
+                          } else {
+                              content += template.substring(i, endIndex + 2);
+                          }
+                      }
+                      i = endIndex + 2;
+                  } else {
+                      if (depth > 0) {
+                          content += template[i];
+                      }
+                      i++;
+                  }
+              }
+              
+              return { content, nextIndex: i };
+          }
+          
+          parseSwitchContent(content, switchVariable, data) {
+              const switchValue = this.getNestedValue(data, switchVariable);
+              const switchValueStr = String(switchValue);
+              
+              let result = '';
+              let i = 0;
+              let foundMatch = false;
+              let defaultContent = '';
+              
+              while (i < content.length) {
+                  if (content.substring(i, i + 2) === '{{') {
+                      const endIndex = content.indexOf('}}', i);
+                      if (endIndex === -1) {
+                          break;
+                      }
+                      
+                      const tag = content.substring(i + 2, endIndex).trim();
+                      
+                      if (tag.startsWith('#case ')) {
+                          const caseValue = tag.substring(6).trim();
+                          const { content: caseContent, nextIndex } = this.findBlockContent(content, endIndex + 2, 'case');
+                          
+                          let parsedCaseValue = caseValue;
+                          if ((caseValue.startsWith('"') && caseValue.endsWith('"')) || 
+                              (caseValue.startsWith("'") && caseValue.endsWith("'"))) {
+                              parsedCaseValue = caseValue.slice(1, -1);
+                          }
+                          
+                          if (!foundMatch && switchValueStr === parsedCaseValue) {
+                              result = this.parseTemplate(caseContent, data);
+                              foundMatch = true;
+                          }
+                          
+                          i = nextIndex;
+                      } else if (tag === '#default') {
+                          const { content: defContent, nextIndex } = this.findBlockContent(content, endIndex + 2, 'default');
+                          defaultContent = defContent;
+                          i = nextIndex;
+                      } else {
+                          i = endIndex + 2;
+                      }
+                  } else {
+                      i++;
+                  }
+              }
+              
+              if (!foundMatch && defaultContent) {
+                  result = this.parseTemplate(defaultContent, data);
+              }
+              
+              return result;
+          }
+          
+          renderSimple(template, data = {}) {
+              let result = template;
+              
+              result = result.replace(/\{\{#each\s+([^}]+)\}\}([\s\S]*?)\{\{\/each\}\}/g, (match, arrayPath, content) => {
+                  const array = this.getNestedValue(data, arrayPath);
+                  if (!Array.isArray(array) || array.length === 0) return '';
+                  
+                  return array.map((item, index) => {
+                           const itemData = { ...data, this: item, index: index, first: index === 0, last: index === array.length - 1 };
+                           return this.renderSimple(content, itemData); 
+                       }).join('');
+              });
+              
+              let maxIterations = 10;
+              while (maxIterations-- > 0) {
+                  const beforeReplace = result;
+                  
+                  result = result.replace(/\{\{#if\s+([^}]+)\}\}((?:(?!\{\{#if|\{\{else\}\}|\{\{\/if\}\}).)*)\{\{else\}\}((?:(?!\{\{#if|\{\{\/if\}\}).)*)\{\{\/if\}\}/g, (match, condition, ifContent, elseContent) => {
+                      const conditionValue = this.evaluateCondition(condition, data);
+                      if (conditionValue) {
+                          return ifContent;
+                      } else {
+                          return elseContent;
+                      }
+                  });
+                  
+                  result = result.replace(/\{\{#if\s+([^}]+)\}\}((?:(?!\{\{#if|\{\{else\}\}|\{\{\/if\}\}).)*)\{\{\/if\}\}/g, (match, condition, content) => {
+                      const conditionValue = this.evaluateCondition(condition, data);
+                      if (conditionValue) {
+                          return content;
+                      }
+                      return '';
+                  });
+                  
+                  if (beforeReplace === result) {
+                      break;
+                  }
+              }
+              
+              result = result.replace(/\{\{([^#\/][^}]*)\}\}/g, (match, path) => {
+                  const value = this.getNestedValue(data, path.trim());
+                  return value !== undefined ? String(value) : '';
+              });
+              
+              return result;
+          }
+          
+          getNestedValue(obj, path) {
+              if (!path || typeof path !== 'string') {
+                  return undefined;
+              }
+              
+              if (path.startsWith('../')) {
+                  const parentPath = path.substring(3);
+                  if (obj.parent) {
+                      if (obj.parent.this && typeof obj.parent.this === 'object') {
+                          const result = this.getNestedValue(obj.parent.this, parentPath);
+                          if (result !== undefined) {
+                              return result;
+                          }
+                      }
+                      return this.getNestedValue(obj.parent, parentPath);
+                  }
+                  return undefined;
+              }
+              
+              if (path.startsWith('this.')) {
+                  const thisPath = path.substring(5);
+                  if (thisPath === '') {
+                      return obj.this || obj;
+                  }
+                  
+                  if (obj.this) {
+                      const keys = thisPath.split('.');
+                      let current = obj.this;
+                      
+                      for (const key of keys) {
+                          if (current == null || typeof current !== 'object') {
+                              break;
+                          }
+                          current = current[key];
+                      }
+                      
+                      if (current !== undefined) {
+                          return current;
+                      }
+                  }
+                  
+                  const keys = thisPath.split('.');
+                  let current = obj;
+                  
+                  for (const key of keys) {
+                      if (current == null || typeof current !== 'object') {
+                          return undefined;
+                      }
+                      current = current[key];
+                  }
+                  
+                  return current;
+              }
+              
+              const keys = path.split('.');
+              let current = obj;
+              
+              for (const key of keys) {
+                  if (current == null || typeof current !== 'object') {
+                      return undefined;
+                  }
+                  current = current[key];
+              }
+              
+              return current;
+          }
+          
+          evaluateCondition(condition, data) {
+              const trimmedCondition = condition.trim();
+              
+              if (trimmedCondition.includes('&&') || trimmedCondition.includes('||')) {
+                  return this.evaluateLogicalExpression(trimmedCondition, data);
+              }
+              
+              if (trimmedCondition.includes('(') && trimmedCondition.includes(')')) {
+                  return this.evaluateMethodCall(trimmedCondition, data);
+              }
+              
+              if (trimmedCondition.includes('>') || trimmedCondition.includes('<') || 
+                  trimmedCondition.includes('===') || trimmedCondition.includes('!==') ||
+                  trimmedCondition.includes('==') || trimmedCondition.includes('!=') ||
+                  trimmedCondition.includes('>=') || trimmedCondition.includes('<=')) {
+                  return this.evaluateComparison(trimmedCondition, data);
+              }
+              
+              const value = this.getNestedValue(data, trimmedCondition);
+              const result = Boolean(value && (Array.isArray(value) ? value.length > 0 : true));
+              return result;
+          }
+          
+          evaluateComparison(expression, data) {
+              const operators = ['===', '!==', '>=', '<=', '==', '!=', '>', '<'];
+              
+              for (const op of operators) {
+                  if (expression.includes(op)) {
+                      const parts = expression.split(op).map(p => p.trim());
+                      if (parts.length === 2) {
+                          const leftValue = this.evaluateValue(parts[0], data);
+                          const rightValue = this.evaluateValue(parts[1], data);
+                          
+                          switch (op) {
+                              case '>':
+                                  return Number(leftValue) > Number(rightValue);
+                              case '<':
+                                  return Number(leftValue) < Number(rightValue);
+                              case '>=':
+                                  return Number(leftValue) >= Number(rightValue);
+                              case '<=':
+                                  return Number(leftValue) <= Number(rightValue);
+                              case '===':
+                                  return String(leftValue) === String(rightValue);
+                              case '!==':
+                                  return String(leftValue) !== String(rightValue);
+                              case '==':
+                                  return String(leftValue) === String(rightValue);
+                              case '!=':
+                                  return String(leftValue) !== String(rightValue);
+                          }
+                      }
+                      break;
+                  }
+              }
+              return false;
+          }
+          
+          evaluateLogicalExpression(expression, data) {
+              if (expression.includes('(') && expression.includes(')')) {
+                  const parenMatch = expression.match(/\(([^)]+)\)/);
+                  if (parenMatch) {
+                      const innerExpression = parenMatch[1];
+                      const innerResult = this.evaluateCondition(innerExpression, data);
+                      
+                      const replacedExpression = expression.replace(parenMatch[0], innerResult.toString());
+                      
+                      if (replacedExpression.includes('&&') || replacedExpression.includes('||')) {
+                          return this.evaluateLogicalExpression(replacedExpression, data);
+                      } else {
+                          return this.evaluateCondition(replacedExpression, data);
+                      }
+                  }
+              }
+              
+              if (expression.includes('&&')) {
+                  const parts = expression.split('&&').map(p => p.trim());
+                  return parts.every(part => {
+                      if (part === 'true') return true;
+                      if (part === 'false') return false;
+                      return this.evaluateCondition(part, data);
+                  });
+              }
+              
+              if (expression.includes('||')) {
+                  const parts = expression.split('||').map(p => p.trim());
+                  return parts.some(part => {
+                      if (part === 'true') return true;
+                      if (part === 'false') return false;
+                      return this.evaluateCondition(part, data);
+                  });
+              }
+              
+              return false;
+          }
+          
+          evaluateValue(value, data) {
+              const trimmed = value.trim();
+              
+              if ((trimmed.startsWith('"') && trimmed.endsWith('"')) ||
+                  (trimmed.startsWith("'") && trimmed.endsWith("'"))) {
+                  return trimmed.slice(1, -1);
+              }
+              
+              if (trimmed === 'true') {
+                  return true;
+              }
+              if (trimmed === 'false') {
+                  return false;
+              }
+              
+              if (!isNaN(trimmed) && trimmed !== '') {
+                  return Number(trimmed);
+              }
+              
+              return this.getNestedValue(data, trimmed);
+          }
+          
+          evaluateMethodCall(expression, data) {
+              try {
+                  const hasMatch = expression.match(/^has\(([^,]+),\s*['"]([^'"]+)['"],\s*['"]([^'"]+)['"]\)$/);
+                  if (hasMatch) {
+                      const [, objectPath, propertyName, targetValue] = hasMatch;
+                      return this.evaluateHasFunction(objectPath.trim(), propertyName, targetValue, data);
+                  }
+                  
+                  const methodCallMatch = expression.match(/^(.+?)\.([^.()]+)\(([^)]*)\)$/);
+                  if (!methodCallMatch) {
+                      return false;
+                  }
+                  
+                  const [, objectPath, methodName, argsStr] = methodCallMatch;
+                  
+                  const obj = this.getNestedValue(data, objectPath);
+                  
+                  if (!obj) {
+                      return false;
+                  }
+                  
+                  if (typeof obj[methodName] !== 'function') {
+                      return false;
+                  }
+                  
+                  const args = this.parseMethodArguments(argsStr);
+                  
+                  const result = obj[methodName].apply(obj, args);
+                  
+                  return Boolean(result);
+                  
+              } catch (error) {
+                  return false;
+              }
+          }
+          
+          parseMethodArguments(argsStr) {
+              if (!argsStr.trim()) {
+                  return [];
+              }
+              
+              const args = [];
+              const trimmed = argsStr.trim();
+              
+              const parts = trimmed.split(',').map(part => part.trim());
+              
+              for (const part of parts) {
+                  if (part.startsWith('"') && part.endsWith('"')) {
+                      args.push(part.slice(1, -1));
+                  } else if (part.startsWith("'") && part.endsWith("'")) {
+                      args.push(part.slice(1, -1));
+                  } else if (!isNaN(part)) {
+                      args.push(Number(part));
+                  } else if (part === 'true') {
+                      args.push(true);
+                  } else if (part === 'false') {
+                      args.push(false);
+                  } else if (part === 'null') {
+                      args.push(null);
+                  } else {
+                      args.push(part);
+                  }
+              }
+              
+              return args;
+          }
+          
+          reset() {
+              this.parsers.clear();
+              this.initDefaultParsers();
+              return this;
+          }
+          
+          static destroy() {
+              if (GlobalTemplateEngine.instance) {
+                  delete globalThis.TemplateEngine;
+                  GlobalTemplateEngine.instance = null;
+              }
+          }
+      }
+      
+      if (!globalThis.TemplateEngine) {
+          globalThis.TemplateEngine = new GlobalTemplateEngine();
+      }
+      
+      globalThis.TemplateEngine.destroy = GlobalTemplateEngine.destroy;
+      
+      if (typeof module !== 'undefined' && module.exports) {
+          module.exports = GlobalTemplateEngine;
+      }
+      
+  })();
+  
+  return "";
+  
+  }}$
+  
+  
+  
+  // @beforeloop-end
+  
+  // @default-begin
+  
+  ${{
+  
+  const console = Zotero.getMainWindow().console;
+  
+  
+  
+  await (async function() {
+  
+  sharedObj.itemData = {
+                  id: topItem.id,
+                  key: topItem.key,
+                  title: topItem.getField('title'),
+                  attachments: []
+              };
+  
+              const attachments = await topItem.getAttachments();
+              
+              
+              for (let attachmentID of attachments) {
+                  
+                  const attachment = await Zotero.Items.getAsync(attachmentID);
+                  
+                  
+                  const attachmentTitle = attachment.getField('title') || 'Untitled PDF';
+                  
+                  const attachmentData = {
+                      id: attachment.id,
+                      key: attachment.key,
+                      title: attachmentTitle,
+                      annotations: []
+                  };
+                  
+                  const annotations = attachment.getAnnotations();
+                  
+                  if (annotations.length === 0) {
+                      console.log("  该附件没有 annotations");
+                      sharedObj.itemData.attachments.push(attachmentData);
+                      continue;
+                  }
+                  
+                  const colorMap = {
+                      '#ffd400': 'yellow',
+                      '#ff6666': 'red',
+                      '#5fb236': 'green',
+                      '#2ea8e5': 'blue',
+                      '#a28ae5': 'purple',
+                      '#e56eee': 'magenta',
+                      '#f19837': 'orange',
+                      '#aaaaaa': 'gray'
+                  };
+                  
+                  for (let annotation of annotations) {
+                      const color = annotation.annotationColor || 'default';
+                      const text = annotation.annotationText || '';
+                      const comment = annotation.annotationComment || '';
+                      
+                      let pageNumber = 1;
+                      if (annotation.annotationPageLabel) {
+                          pageNumber = annotation.annotationPageLabel;
+                      } else if (annotation.annotationPosition && annotation.annotationPosition.pageIndex !== undefined) {
+                          pageNumber = annotation.annotationPosition.pageIndex + 1;
+                      }
+                      
+                      const colorName = colorMap[color] || color || 'default';
+                      
+                      attachmentData.annotations.push({
+                          id: annotation.id,
+                          key: annotation.key,
+                          pageNumber: pageNumber,
+                          color: colorName,
+                          text: text,
+                          comment: comment
+                      });
+                  }
+  
+                  sharedObj.itemData.attachments.push(attachmentData);
+  
+              }
+  
+  
+  })();
+  
+  return "";
+  
+  }}$
+  
+  // @default-end
+  
+  
+  // @afterloop-begin
+  
+  ${{
+  
+  const console = Zotero.getMainWindow().console;
+  
+  
+  
+  const markdownTemplate = `{{#each items}}
+      {{#each this.attachments}}
+  # Item: [{{../title}}](zotero://select/library/items/{{../key}}) 
+  - File: [{{this.title}}](zotero://select/library/items/{{this.key}})
+  
+          {{#if this.mindAnnotations}}
+  # Outline
+  
+              {{<code>markmap}}
+                  {{#each this.mindAnnotations}}
+                  {{this.ctrl}} {{escape(this.text)}}
+  
+                  {{/each}}
+              {{<code>}}
+          {{/if}}  //// end of mindmap
+  
+  # Annotations
+  
+          {{#each this.annotations}}
+              {{#each lines(this.text)}}
+  {{#if ../color == 'green'}}>{{/if}}{{../ctrl}} {{#if ../color == 'green'}}Refer: _{{/if}}{{#if ../color == 'orange'}}**_{{/if}}{{escape(this)}}{{#if ../color == 'orange'}}_**{{/if}}{{#if ../color == 'green'}}_{{/if}}
+  
+  {{#if ../color == 'orange' || ../color == 'red' || ../color == 'blue'}}[({{../../../title}}, {{../pageNumber}})](zotero://open-pdf/library/items/{{../../key}}?page={{../pageNumber}}&annotation={{../key}})
+  {{/if}}
+              {{/each}}
+              {{#if this.comment}}
+  
+              {{/if}}
+              {{#each lines(this.comment)}}
+  My Comment: **{{this}}**
+              {{/each}}
+  
+  
+  ---
+          {{/each}}  //// end of annotations
+  
+      {{/each}}   //// end of attachments
+  {{/each}}  //// end of items
+  `;
+  
+        let rendered ="";
+          try {
+  			const reportData = {
+              itemCount: 1,
+              items: []
+          	};
+  			reportData.items.push(sharedObj.itemData);
+              const processedData = globalThis.TemplateEngine.preprocess_data(reportData);
+              rendered = globalThis.TemplateEngine.render(markdownTemplate, processedData);
+  			// const clipboard = Components.classes["@mozilla.org/widget/clipboardhelper;1"]
+            // .getService(Components.interfaces.nsIClipboardHelper);
+        	// clipboard.copyString(rendered);
+            rendered = Zotero.BetterNotes.api.convert.md2html(rendered);
+  
+          } catch (templateError) {
+              console.error("Template render error:", templateError); 
+          }
+  
+  return rendered;
+          
+  }}$
+  
+  
+  // @afterloop-end
+  
+  
+  

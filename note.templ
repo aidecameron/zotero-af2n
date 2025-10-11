@@ -1,0 +1,38 @@
+{{#each items}}
+      {{#each this.attachments}}
+  # Item: [{{../title}}](zotero://select/library/items/{{../key}}) 
+  - File: [{{this.title}}](zotero://select/library/items/{{this.key}})
+  
+          {{#if this.mindAnnotations}}
+  # Outline
+  
+              {{<code>markmap}}
+                  {{#each this.mindAnnotations}}
+                  {{this.ctrl}} {{escape(this.text)}}
+  
+                  {{/each}}
+              {{<code>}}
+          {{/if}}  //// end of mindmap
+  
+  # Annotations
+  
+          {{#each this.annotations}}
+              {{#each lines(this.text)}}
+  {{#if ../color == 'green'}}>{{/if}}{{../ctrl}} {{#if ../color == 'green'}}Refer: _{{/if}}{{#if ../color == 'orange'}}**_{{/if}}{{escape(this)}}{{#if ../color == 'orange'}}_**{{/if}}{{#if ../color == 'green'}}_{{/if}}
+  
+  {{#if ../color == 'orange' || ../color == 'red' || ../color == 'blue'}}[({{../../../title}}, {{../pageNumber}})](zotero://open-pdf/library/items/{{../../key}}?page={{../pageNumber}}&annotation={{../key}})
+  {{/if}}
+              {{/each}}
+              {{#if this.comment}}
+  
+              {{/if}}
+              {{#each lines(this.comment)}}
+  My Comment: **{{this}}**
+              {{/each}}
+  
+  
+  ---
+          {{/each}}  //// end of annotations
+  
+      {{/each}}   //// end of attachments
+  {{/each}}  //// end of items

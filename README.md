@@ -1,116 +1,181 @@
 # AF2N - Annotation Flow to Note
 
-## AF2N 模版，在 Better Notes 模版中使用另一个更简单的 handlebar 风格模版
+## 0. Plugin Effects
 
-在通过 Zotero 阅读文献时，忍不住要标注其中内容，以便后续回顾和组织。
+When reading, the color-highlighted annotations made casually:
 
-要把 Zotero 条目附件（pdf、epub、html 快照）的标注（annotation）输出为一个笔记。一种方法是编程，更简单的方式是， 定制一个 BN 模版。
+![](https://cdn.jsdelivr.net/gh/aidecameron/imgbed@main/blog/2025/10/1760768315301_Pasted%20image%2020251018135908.png)
 
-写 BN 模版通常还是需要基本的JS编程知识，否则出来的结果互动性不强。写这些 JS 也易于调试。
+The effect of notes generated in Zotero:
 
-AF2N 解决这个问题，它集成类似 handlebar 的基本语法，支持在 AF2N 内嵌的模版语言中迭代附件的各个 annotation，形成对输出内容更简单、直接的控制。
+![](https://cdn.jsdelivr.net/gh/aidecameron/imgbed@main/blog/2025/10/1760768315304_Pasted%20image%2020251017200419.png)
 
-## 使用理念
+Effect of pasting into Obsidian via clipboard:
 
-相对于BN 内嵌的 annotation 流水式输出。AF2N 对脑图和文章结构更为友好，用户关注不同标注颜色的意义，就可以控制最终 note 的输出风格。
+![](https://cdn.jsdelivr.net/gh/aidecameron/imgbed@main/blog/2025/10/1760768315304_Pasted%20image%2020251017201146.png)
 
-用户只需在阅读时充分利用颜色标注，必要的时候通过 comment 渐入简单的控制。不需要在文章内容和 note 之间跳转。文章视图（pdf、html 和 epub）以及其中的颜色标注，是唯一需要维护的知识源头。最后 note 只是生成。
+## 1. Introduction
 
-AF2N 适配于书籍和长文的阅读，而不仅是论文。
+AF2N Template, which implements a simpler handlebar-style template engine at the underlying level that can be used within the Better Notes template.
 
-## 颜色和批注（comment）的意义
+When reading literature through Zotero, I can't help but annotate the content for future review and organization.
 
-### 颜色标注含义
+To export multiple highlight annotations from Zotero entry attachments (pdf, epub, html snapshots) into a single note. One approach is through programming, a simpler method is to customize a BN template.
 
-- **黄色**：普通标注
-- **红色**：普通标注，自动附加引用链接
-- **绿色**：数据、引言和案例
-- **蓝色**：数据、引言和案例，自动附加引用链接
-- **粉色**：脑图
-- **橙色**：金句，自动附加引用链接
-- **灰色**：标题分割
+The built-in template Quick Note v5 in the BN plugin can read all annotations of a document and generate a note exclusive to the entry. However, its implementation is somewhat simplistic: annotations are laid out flatly in the result, and each annotation is accompanied by a URL link, which is not conducive to reading or for LLM document embedding processing.
 
-### 脑图标记规则
+If you want to create a BN template according to your desired note output format, you generally still need basic JS programming knowledge, as well as a deeper understanding of the Zotero and BN plugin environment. Otherwise, the resulting output will lack interactivity, and writing these JS scripts is not easy to debug.
 
-**粉色标注**用于脑图线索分割：
-- `#` 代表第一级
-- `##` 代表第二级
-- `!` 代表根（可选）
+AF2N addresses this issue by integrating basic syntax similar to handlebars, supporting iteration over each annotation of the Item attachment within AF2N's embedded template language, enabling simpler and more direct control over the output content.
 
-粉色的部分出现在脑图，`b` 代表 block，在脑图中转为 tab。`bb` 转为两个 tab。
+![](https://cdn.jsdelivr.net/gh/aidecameron/imgbed@main/blog/2025/10/1760768315304_Pasted%20image%2020251018132541.png)
 
-基于 MarkMap 的渲染，在脑图中：
-- 如果 block 和 list 同级，list 会被忽略掉
-- 所有无标记的内容会被忽略掉
-- 如果有 block 和 # 同级，block 会被忽略掉
+You can think of AF2N as "another simple template engine embedded within the Better Notes template."  
+In most cases, if you want to customize the generated note format, you can modify the markdownTemplate variable in the template JS of the BN plugin itself.  
+(Line 1424 in the image below)
 
-脑图和内容分开显示，更为简洁。
+![](https://cdn.jsdelivr.net/gh/aidecameron/imgbed@main/blog/2025/10/1760768315305_Pasted%20image%2020251018133229.png)
 
-### 正文组织规则
+## 2. Usage Philosophy
 
-正文部分，用灰色的 `#` 层级组织，可以在 `#` 后加入自定义的节号以获得更为清晰的显示。
+Compared to the built-in annotation pipeline output of the BN plugin,  
+AF2N is more friendly to brain maps and article structures.  
+By focusing on the meaning of different annotation highlight colors,  
+users can control the final output style of the note.
 
-- `@` 代表向后拼接散句为一个输出项
-- `@<` 表示拼接结束
+Users only need to make full use of color annotations while reading, and when necessary, start typing simple control characters via comment, without frequently switching between the article content and notes. The article view (pdf, html, and epub) and the highlighted color annotations within it are the only sources of target knowledge and records that need to be maintained. Ultimately, the note is merely the generated product.
 
-### Comment 中的标记
+Except for a small number of control characters, users can normally use comment.
 
-在 comment 中：
-- `-` 表示 list 开始
-- `--` 表示 list 内容
-- `o` 表示有序 list 开始
-- `oo` 或者具体数字，表示有序 list 内容，oo 会被自动处理为有序 list 序号
+AF2N is suitable for reading books and long texts, eliminating a large amount of irrelevant cognitive load, not just for papers.
 
-## 输出效果
+## 3. Highlight Colors and Control Significance of Characters in Comments
 
-根据自带的 AF2N 模板，实现以下效果（可轻易更改）：
+### 3.1 Color Meanings
 
-- **引例、案例**：在输出中用斜体 `_` 包裹引用
-- **自己写的评论**：用 `**` 包裹
-- **金句**：用 `**_` 包裹
+- **Yellow**: Regular annotation  
+- **Red**: Regular annotation, with reference link attached in the generated note  
+- **Green**: Quotation  
+- **Blue**: Quotation, with reference link attached in the generated note  
+- **Magenta**: Mind map  
+- **Orange**: Golden sentence, automatically attached with a reference link  
+- **Gray**: Title separator
 
-## 如何使用
+### 3.2 Mind Map Marking Rules
 
-### 安装到 Better Notes 插件配置
+**Magenta marking** is used for mind map clue segmentation:
 
-1. 打开 Zotero，进入 Better Notes 插件设置
-2. 在模板配置中导入 `bn-plugin/annotation-flow-to-note-1.bn` 文件
-3. 修改 AF2N 内嵌模版的行为，微调你想要的输出风格（可选，所见即所得）
-4. 让这个插件在运行时，将结果的 md 内容复制到剪贴板
+- `#` represents the first level  
+- `##` represents the second level  
+- `!` represents the root (optional)
 
-### 如何更改默认的 AF2N
+The magenta-colored section appears in the mind map.  
+In the source code of the AF2N template, the mind map is displayed at the beginning of the generated note, using the markmap format.  
+This format cannot be parsed by Zotero, but in Obsidian, the Mindmap Nextgen plugin can assist in displaying it.  
+`b` represents block, which is converted to a tab in the mind map.  
+`bb` is converted to two tabs.
 
-1. 参考 `af2n_template_guide.md` 了解 AF2N 模板语法。（一个样例在 `note.templ` ）
-2. 修改已导入 Better Notes 插件的 js 代码。
+Based on MarkMap rendering, in the mind map:
 
-### 如何拷贝 md 到剪贴板
+- If block and list are at the same level, the list will be ignored  
+- All unmarked content will be ignored  
+- If block and # are at the same level, the block will be ignored
 
-1. 在 Better Notes 中运行 AF2N 模板
-2. 生成的 Markdown 内容会自动格式化
-3. 使用 Zotero 的复制功能将内容复制到剪贴板
-4. 可以直接粘贴到其他 Markdown 编辑器中使用
+Annotate mind maps in the literature reading interface:
 
-## 文件结构
+![](https://cdn.jsdelivr.net/gh/aidecameron/imgbed@main/blog/2025/10/1760768315305_Pasted%20image%2020251017210302.png)
+
+Display effect in Obsidian:
+
+![](https://cdn.jsdelivr.net/gh/aidecameron/imgbed@main/blog/2025/10/1760768315305_Pasted%20image%2020251017210430.png)
+
+### 3.3 Text Organization Rules
+
+Body section, use gray annotations to organize chapters, you can use the `#` character in comments to control the hierarchy, and add custom section numbers after `#` for a clearer display.
+
+![](https://cdn.jsdelivr.net/gh/aidecameron/imgbed@main/blog/2025/10/1760768315305_Pasted%20image%2020251017205533.png)
+
+The presentation of the above annotation in the note:
+
+![|300](https://cdn.jsdelivr.net/gh/aidecameron/imgbed@main/blog/2025/10/1760768315305_Pasted%20image%2020251017205735.png)
+
+### 3.4 Annotation Splicing
+
+AF2N template supports concatenating multiple adjacent, same-color annotations into a single record in the resulting note.
+
+- `@` represents concatenating scattered phrases backward into one output item
+- `@<` indicates the end of concatenation
+
+![](https://cdn.jsdelivr.net/gh/aidecameron/imgbed@main/blog/2025/10/1760768315305_Pasted%20image%2020251017204310.png)
+
+### 3.5 Concatenating Multiple Annotations into a List
+
+In the comment, add the following control characters to concatenate multiple adjacent annotations of the same color into one note record:
+
+- `-` indicates the start of a list  
+- `--` indicates list content  
+- `o` indicates the start of an ordered list  
+- `oo` or specific numbers indicate ordered list content, where `oo` will be automatically processed as ordered list numbering
+
+![](https://cdn.jsdelivr.net/gh/aidecameron/imgbed@main/blog/2025/10/1760768315306_Pasted%20image%2020251017204944.png)
+
+The presentation of the above annotation in the note:
+
+![|300](https://cdn.jsdelivr.net/gh/aidecameron/imgbed@main/blog/2025/10/1760768315306_Pasted%20image%2020251017205126.png)
+
+## 4. Output Effect
+
+According to the built-in AF2N template, achieve the following effects (easily modifiable):
+
+- **Examples, Cases**: Use italics `_` to wrap citations in the output  
+- **Self-written comments**: Use `**` to wrap  
+- **Golden quotes**: Use `**_` to wrap
+
+##  5. How to Use
+
+### 5.1 Installation to Better Notes Plugin Configuration
+
+1. Ensure Zotero 7 is installed, and install the Better Notes plugin (version 2.5.8 or above)
+2. Open Zotero, enter the Better Notes plugin settings
+3. Import the `bn-plugin/annotation-flow-to-note-1.bn` file in the template configuration
+4. Modify the behavior of the AF2N embedded template in the source code to fine-tune your desired output style. (Optional, WYSIWYG)
+5. Configure the plugin to copy the resulting md content to the clipboard during runtime. (Optional)
+
+### 5.2 How to Change the Default AF2N
+
+1. Refer to `af2n_template_guide.md` for AF2N template syntax. (An example is in `note.templ` )
+
+2. Modify the JS code already imported into the Better Notes plugin. (Around line 1400 of the source file, the assignment of the variable markdownTemplate)
+
+### 5.3 How to Copy the Resulting md to the Clipboard
+
+1. Uncomment the following three lines in the source code (lines 1775～1777)
+
+![](https://cdn.jsdelivr.net/gh/aidecameron/imgbed@main/blog/2025/10/1760768315306_Pasted%20image%2020251017211917.png)
+
+2. Run the AF2N template in Better Notes
+3. The generated Markdown content will be automatically formatted and copied to the clipboard
+4. It can be directly pasted into other Markdown editors, including Obsidian
+
+##  6. Project Structure
 
 ```
 zotero-af2n/
-├── README.md                           # 项目说明文档
-├── note.templ                          # AF2N 模板文件
-├── af2n_template_guide.md             # 模板语法指南
+├── README.md                           # Project documentation
+├── note.templ                          # AF2N template file
+├── af2n_template_guide.md             # Template syntax guide
 └── bn-plugin/
-    └── annotation-flow-to-note-1.bn   # Better Notes 插件配置文件
+
+└── annotation-flow-to-note-1.bn   # contents to be imported to Better Notes template plugin
 ```
 
-## 贡献
+##  7. Support Author
 
-欢迎提交 Issue 和 Pull Request 来改进这个项目。
-
-## 支持作者
-
-作者的公众号：**ai的十日谈**
+- Blog: [AI Decameron](https://blog.aidecameron.com)
+- Wechat Page:
 
 <img src="https://cdn.jsdelivr.net/gh/aidecameron/imgbed@main/blog/2025/10/1760165896715_wechat_aidecameron.JPG?raw=true" width="20%"/>
 
-## 许可证
+## 8. License
 
-本项目采用 MIT 许可证。
+MIT
